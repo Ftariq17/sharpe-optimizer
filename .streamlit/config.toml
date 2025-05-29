@@ -1,0 +1,8 @@
+[theme]
+base = "light"
+primaryColor = "#1A4D2E"             # Deep pine green (professional, finance tone)
+backgroundColor = "#F8F9FA"          # Clean light gray background
+secondaryBackgroundColor = "#E0E0E0" # Subtle gray for sidebar and widgets
+textColor = "#111111"                # Sharp, near-black text
+font = "sans serif"
+
