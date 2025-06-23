@@ -12,14 +12,6 @@ The **Sharpe Ratio Optimization Tool** is an interactive Streamlit web app that 
 - 📉 Benchmark against **SPY**
 - 💾 Download **CSV** of optimal allocations
 
-## 📸 Preview
-
-| Monte Carlo Simulation | Rolling Sharpe Ratio |
-|------------------------|----------------------|
-| ![MC](screenshots/monte_carlo_plot.png) | ![Rolling Sharpe](screenshots/rolling_sharpe.png) |
-
-> _Optional: Create a `/screenshots` folder with `monte_carlo_plot.png` and `rolling_sharpe.png` screenshots to enable previews._
-
 ## 🧠 How It Works
 
 1. Input tickers manually or select from a curated list of popular stocks.
