@@ -138,16 +138,16 @@ rolling_mean_mc = rolling_mc.rolling(window).mean() * 252
 rolling_sharpe_mc = (rolling_mean_mc - risk_free_rate) / rolling_vol_mc
 
 # Plotly Monte Carlo
-fig_mc = px.scatter(df_mc, x="Volatility", y="Return", color="Sharpe", color_continuous_scale="viridis")
-fig_mc.add_trace(go.Scatter(x=[opt_volatility], y=[opt_return], mode='markers', marker=dict(color='red', size=12, symbol='star'), name='Optimized'))
-fig_mc.add_trace(go.Scatter(x=[best_mc["Volatility"]], y=[best_mc["Return"]], mode='markers', marker=dict(color='blue', size=10, symbol='x'), name='Best MC'))
+fig_mc = px.scatter(df_mc, x="Volatility", y="Return", color="Sharpe", color_continuous_scale="viridis", width=700, height=450)
+fig_mc.add_trace(go.Scatter(x=[opt_volatility], y=[opt_return], mode='markers', marker=dict(color='red', size=14, symbol='star'), name='Optimized'))
+fig_mc.add_trace(go.Scatter(x=[best_mc["Volatility"]], y=[best_mc["Return"]], mode='markers', marker=dict(color='blue', size=12, symbol='x'), name='Best MC'))
 st.plotly_chart(fig_mc)
 
 # Plotly Rolling Sharpe
 fig_sharpe = go.Figure()
 fig_sharpe.add_trace(go.Scatter(y=rolling_sharpe, name="Optimized Portfolio", line=dict(color="green", width=2)))
 fig_sharpe.add_trace(go.Scatter(y=rolling_sharpe_mc, name="Best MC Portfolio", line=dict(color="#39FF14", dash="dash", width=1)))
-fig_sharpe.update_layout(title="Rolling Sharpe Ratio (60-day window)", yaxis_title="Sharpe Ratio")
+fig_sharpe.update_layout(title="Rolling Sharpe Ratio (60-day window)", yaxis_title="Sharpe Ratio", width=700, height=350)
 st.plotly_chart(fig_sharpe)
 
 # Plotly Backtest
@@ -160,7 +160,7 @@ fig2 = go.Figure()
 fig2.add_trace(go.Scatter(y=cumulative_opt, name="Optimized Portfolio", line=dict(color="green", width=2)))
 fig2.add_trace(go.Scatter(y=cumulative_mc, name="Best MC Portfolio", line=dict(color="#39FF14", dash="dash", width=1)))
 fig2.add_trace(go.Scatter(y=cumulative_spy, name="SPY Benchmark", line=dict(color="blue", width=1)))
-fig2.update_layout(title="Backtested Cumulative Returns", yaxis_title="Portfolio Value")
+fig2.update_layout(title="Backtested Cumulative Returns", yaxis_title="Portfolio Value", width=700, height=350)
 st.plotly_chart(fig2)
 
 # Output Results
