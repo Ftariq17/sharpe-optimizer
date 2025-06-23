@@ -1,3 +1,4 @@
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -184,3 +185,6 @@ st.write(f"**Sharpe Ratio:** {best_mc['Sharpe']:.4f}")
 st.subheader("⬇️ Download Allocation")
 st.dataframe(weights_df)
 st.download_button("Download as CSV", weights_df.to_csv(index=False), file_name="optimized_portfolio.csv")
+
+
+
