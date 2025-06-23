@@ -1,4 +1,3 @@
-
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -126,6 +125,23 @@ rounded_weights = np.round(opt_weights * 100, 2)
 rounded_weights[rounded_weights < 0.01] = 0
 weights_df = pd.DataFrame({"Ticker": tickers, "Allocation (%)": rounded_weights})
 
+# Output Results
+st.subheader("🔧 Optimized Portfolio (Max Sharpe via Optimization)")
+for i, t in enumerate(tickers):
+    st.write(f"**{t}:** {opt_weights[i]:.2%}")
+st.write(f"**Expected Return:** {opt_return:.2%}")
+st.write(f"**Volatility:** {opt_volatility:.2%}")
+st.write(f"**Sharpe Ratio:** {opt_sharpe:.4f}")
+st.write(f"**Turnover:** {turnover:.2%}")
+st.write(f"**Transaction Cost Incurred:** {cost:.2%}")
+
+st.subheader("🎲 Best Portfolio (from Monte Carlo Simulation)")
+for t in tickers:
+    st.write(f"**{t}:** {best_mc[t]:.2%}")
+st.write(f"**Expected Return:** {best_mc['Return']:.2%}")
+st.write(f"**Volatility:** {best_mc['Volatility']:.2%}")
+st.write(f"**Sharpe Ratio:** {best_mc['Sharpe']:.4f}")
+
 # Rolling Sharpe Ratio
 window = 60
 rolling_returns = (log_returns[tickers] @ opt_weights).dropna()
@@ -140,8 +156,9 @@ rolling_sharpe_mc = (rolling_mean_mc - risk_free_rate) / rolling_vol_mc
 
 # Plotly Monte Carlo
 fig_mc = px.scatter(df_mc, x="Volatility", y="Return", color="Sharpe", color_continuous_scale="viridis", width=700, height=450)
-fig_mc.add_trace(go.Scatter(x=[opt_volatility], y=[opt_return], mode='markers', marker=dict(color='red', size=14, symbol='star'), name='Optimized'))
-fig_mc.add_trace(go.Scatter(x=[best_mc["Volatility"]], y=[best_mc["Return"]], mode='markers', marker=dict(color='blue', size=12, symbol='x'), name='Best MC'))
+fig_mc.add_trace(go.Scatter(x=[opt_volatility], y=[opt_return], mode='markers', marker=dict(color='red', size=14, symbol='star'), name='Optimized', showlegend=True))
+fig_mc.add_trace(go.Scatter(x=[best_mc["Volatility"]], y=[best_mc["Return"]], mode='markers', marker=dict(color='blue', size=12, symbol='x'), name='Best MC', showlegend=True))
+fig_mc.update_layout(legend=dict(x=0.75, y=0.95))
 st.plotly_chart(fig_mc)
 
 # Plotly Rolling Sharpe
@@ -164,27 +181,11 @@ fig2.add_trace(go.Scatter(y=cumulative_spy, name="SPY Benchmark", line=dict(colo
 fig2.update_layout(title="Backtested Cumulative Returns", yaxis_title="Portfolio Value", width=700, height=350)
 st.plotly_chart(fig2)
 
-# Output Results
-st.subheader("🔧 Optimized Portfolio (Max Sharpe via Optimization)")
-for i, t in enumerate(tickers):
-    st.write(f"**{t}:** {opt_weights[i]:.2%}")
-st.write(f"**Expected Return:** {opt_return:.2%}")
-st.write(f"**Volatility:** {opt_volatility:.2%}")
-st.write(f"**Sharpe Ratio:** {opt_sharpe:.4f}")
-st.write(f"**Turnover:** {turnover:.2%}")
-st.write(f"**Transaction Cost Incurred:** {cost:.2%}")
-
-st.subheader("🎲 Best Portfolio (from Monte Carlo Simulation)")
-for t in tickers:
-    st.write(f"**{t}:** {best_mc[t]:.2%}")
-st.write(f"**Expected Return:** {best_mc['Return']:.2%}")
-st.write(f"**Volatility:** {best_mc['Volatility']:.2%}")
-st.write(f"**Sharpe Ratio:** {best_mc['Sharpe']:.4f}")
-
 # CSV Download
 st.subheader("⬇️ Download Allocation")
 st.dataframe(weights_df)
 st.download_button("Download as CSV", weights_df.to_csv(index=False), file_name="optimized_portfolio.csv")
+
 
 
 
