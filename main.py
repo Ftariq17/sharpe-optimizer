@@ -2,8 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
-import plotly.express as px
+import matplotlib.pyplot as plt
 import datetime as dt
 from scipy.optimize import minimize
 
@@ -31,6 +30,7 @@ popular_picks = st.sidebar.multiselect("Or choose from popular stocks:", popular
 # Combine and deduplicate tickers
 tickers = list(set([t.strip().upper() for t in ticker_input.split(",") if t.strip()] + popular_picks))
 
+
 start_date = st.date_input("Start Date", dt.date(2020, 1, 1))
 end_date = st.date_input("End Date", dt.date(2025, 1, 1))
 risk_free_rate = st.number_input("Risk-Free Rate", value=0.0395)
@@ -46,6 +46,7 @@ if len(tickers) < 2:
 
 @st.cache_data
 def load_data(tickers, start, end):
+    # Download all at once (faster)
     raw_data = yf.download(tickers + ["SPY"], start=start, end=end)["Close"]
     raw_data = raw_data.dropna()
 
@@ -56,11 +57,12 @@ def load_data(tickers, start, end):
         else:
             st.warning(f"⚠️ '{ticker}' returned insufficient or missing data and was excluded.")
 
+    # Filter to valid tickers only (SPY still included for benchmarking)
     price_df = raw_data[valid_tickers + ["SPY"]] if "SPY" in raw_data.columns else raw_data[valid_tickers]
 
     return price_df, valid_tickers
 
-price_df, tickers = load_data(tickers, start_date, end_date)
+price_df,tickers = load_data(tickers, start_date, end_date)
 log_returns = np.log(price_df / price_df.shift(1)).dropna()
 annual_mean_returns = log_returns[tickers].mean() * 252
 cov_matrix = log_returns[tickers].cov() * 252
@@ -89,7 +91,7 @@ if df_mc.empty:
 best_mc = df_mc.loc[df_mc["Sharpe"].idxmax()]
 
 # Optimizer
-def penalized_negative_sharpe(weights, mean_returns, cov_matrix, rf, prev_weights, turnover_penalty, transaction_cost):
+def penalized_negative_sharpe(weights, mean_returns, cov_matrix, rf, prev_weights, turnover_penalty,transaction_cost):
     weights = np.array(weights)
     port_return = np.dot(weights, mean_returns)
     port_volatility = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
@@ -99,6 +101,7 @@ def penalized_negative_sharpe(weights, mean_returns, cov_matrix, rf, prev_weight
     penalty = turnover_penalty * turnover
     return -((effective_return - rf) / port_volatility - penalty)
 
+
 prev_weights = np.array([1.0 / num_assets] * num_assets)
 constraints = {"type": "eq", "fun": lambda x: np.sum(x) - 1}
 bounds = tuple((0, max_weight) for _ in range(num_assets))
@@ -107,7 +110,7 @@ initial_guess = best_mc[tickers].values
 opt_result = minimize(
     penalized_negative_sharpe,
     initial_guess,
-    args=(annual_mean_returns, cov_matrix, risk_free_rate, prev_weights, turnover_penalty, transaction_cost),
+    args=(annual_mean_returns, cov_matrix,risk_free_rate, prev_weights, turnover_penalty,transaction_cost),
     method="SLSQP",
     bounds=bounds,
     constraints=constraints
@@ -116,31 +119,17 @@ opt_result = minimize(
 opt_weights = opt_result.x
 opt_return = np.dot(opt_weights, annual_mean_returns)
 opt_volatility = np.sqrt(np.dot(opt_weights.T, np.dot(cov_matrix, opt_weights)))
+opt_sharpe = (opt_return - risk_free_rate) / opt_volatility
 turnover = np.sum(np.abs(opt_weights - prev_weights))
 cost = turnover * transaction_cost
 effective_return = opt_return - cost
-opt_sharpe = (effective_return - risk_free_rate) / opt_volatility
+opt_sharpe = (effective_return - risk_free_rate)/opt_volatility
 
+# Round weights and zero out small values
 rounded_weights = np.round(opt_weights * 100, 2)
 rounded_weights[rounded_weights < 0.01] = 0
 weights_df = pd.DataFrame({"Ticker": tickers, "Allocation (%)": rounded_weights})
 
-# Output Results
-st.subheader("🔧 Optimized Portfolio (Max Sharpe via Optimization)")
-for i, t in enumerate(tickers):
-    st.write(f"**{t}:** {opt_weights[i]:.2%}")
-st.write(f"**Expected Return:** {opt_return:.2%}")
-st.write(f"**Volatility:** {opt_volatility:.2%}")
-st.write(f"**Sharpe Ratio:** {opt_sharpe:.4f}")
-st.write(f"**Turnover:** {turnover:.2%}")
-st.write(f"**Transaction Cost Incurred:** {cost:.2%}")
-
-st.subheader("🎲 Best Portfolio (from Monte Carlo Simulation)")
-for t in tickers:
-    st.write(f"**{t}:** {best_mc[t]:.2%}")
-st.write(f"**Expected Return:** {best_mc['Return']:.2%}")
-st.write(f"**Volatility:** {best_mc['Volatility']:.2%}")
-st.write(f"**Sharpe Ratio:** {best_mc['Sharpe']:.4f}")
 
 # Rolling Sharpe Ratio
 window = 60
@@ -149,43 +138,81 @@ rolling_vol = rolling_returns.rolling(window).std() * np.sqrt(252)
 rolling_mean = rolling_returns.rolling(window).mean() * 252
 rolling_sharpe = (rolling_mean - risk_free_rate) / rolling_vol
 
+# Best MC portfolio
 rolling_mc = (log_returns[tickers] @ best_mc[tickers].values).dropna()
 rolling_vol_mc = rolling_mc.rolling(window).std() * np.sqrt(252)
 rolling_mean_mc = rolling_mc.rolling(window).mean() * 252
 rolling_sharpe_mc = (rolling_mean_mc - risk_free_rate) / rolling_vol_mc
 
-# Plotly Monte Carlo
-fig_mc = px.scatter(df_mc, x="Volatility", y="Return", color="Sharpe", color_continuous_scale="viridis", width=700, height=450)
-fig_mc.add_trace(go.Scatter(x=[opt_volatility], y=[opt_return], mode='markers', marker=dict(color='red', size=14, symbol='star'), name='Optimized', showlegend=True))
-fig_mc.add_trace(go.Scatter(x=[best_mc["Volatility"]], y=[best_mc["Return"]], mode='markers', marker=dict(color='blue', size=12, symbol='x'), name='Best MC', showlegend=True))
-fig_mc.update_layout(legend=dict(x=0.75, y=0.95))
-st.plotly_chart(fig_mc)
+st.subheader("🔧 Optimized Portfolio (Max Sharpe via Optimization)")
+for i, t in enumerate(tickers):
+    st.write(f"**{t}:** {opt_weights[i]:.2%}")
+st.write(f"**Expected Return:** {opt_return:.2%}")
+st.write(f"**Volatility:** {opt_volatility:.2%}")
+st.write(f"**Sharpe Ratio:** {opt_sharpe:.4f}")
+st.write(f"**Turnover:** {turnover:.2%}")
+st.write(f"**Transaction Cost Incurred:** {cost:.2%}")
+st.markdown("<br><br>", unsafe_allow_html=True)
 
-# Plotly Rolling Sharpe
-fig_sharpe = go.Figure()
-fig_sharpe.add_trace(go.Scatter(y=rolling_sharpe, name="Optimized Portfolio", line=dict(color="green", width=2)))
-fig_sharpe.add_trace(go.Scatter(y=rolling_sharpe_mc, name="Best MC Portfolio", line=dict(color="#39FF14", dash="dash", width=1)))
-fig_sharpe.update_layout(title="Rolling Sharpe Ratio (60-day window)", yaxis_title="Sharpe Ratio", width=700, height=350)
-st.plotly_chart(fig_sharpe)
+# Monte Carlo Best
+st.subheader("🎲 Best Portfolio (from Monte Carlo Simulation)")
+for t in tickers:
+    st.write(f"**{t}:** {best_mc[t]:.2%}")
+st.write(f"**Expected Return:** {best_mc['Return']:.2%}")
+st.write(f"**Volatility:** {best_mc['Volatility']:.2%}")
+st.write(f"**Sharpe Ratio:** {best_mc['Sharpe']:.4f}")
 
-# Plotly Backtest
+st.markdown("<br><br>", unsafe_allow_html=True)
+
+# Monte Carlo Scatter Plot
+st.subheader("📈 Monte Carlo Simulation Results")
+fig_mc, ax_mc = plt.subplots(figsize=(8,6))
+sc = ax_mc.scatter(df_mc["Volatility"], df_mc["Return"], c=df_mc["Sharpe"], cmap="viridis", alpha=0.6,edgecolors="black")
+ax_mc.scatter(opt_volatility, opt_return, color="red", marker="*", s=200, label="Optimized")
+ax_mc.scatter(best_mc["Volatility"], best_mc["Return"], color="blue", marker="x", s=100, label="Best MC")
+ax_mc.set_xlabel("Volatility")
+ax_mc.set_ylabel("Return")
+ax_mc.set_title("Monte Carlo Portfolios")
+ax_mc.legend()
+plt.colorbar(sc, label="Sharpe Ratio")
+st.pyplot(fig_mc)
+
+st.markdown("<br><br>", unsafe_allow_html=True)
+
+# Rolling Sharpe Plot
+st.subheader("📈 Rolling Sharpe Ratio")
+fig, ax = plt.subplots(figsize=(8,4))
+rolling_sharpe.plot(ax=ax,label="Optimized Portfolio",lw=2,color="green")
+rolling_sharpe_mc.plot(ax=ax, label="Best MC Portfolio", lw=1, linestyle="--",color="#39FF14")
+ax.set_title("Rolling Sharpe Ratio (60-day window)")
+ax.set_ylabel("Sharpe Ratio")
+ax.grid(True)
+ax.legend()
+st.pyplot(fig)
+
+st.markdown("<br><br>", unsafe_allow_html=True)
+
+# Backtest
+st.subheader("📊 Backtest: Cumulative Returns vs. SPY")
 cumulative_opt = (1 + rolling_returns).cumprod()
 rolling_returns_mc = (log_returns[tickers] @ best_mc[tickers].values).dropna()
 cumulative_mc = (1 + rolling_returns_mc).cumprod()
 cumulative_spy = (1 + log_returns["SPY"]).cumprod()
+fig2, ax2 = plt.subplots(figsize=(8,4))
+cumulative_opt.plot(ax=ax2, label="Optimized Portfolio",lw=2,color="green")
+cumulative_mc.plot(ax=ax2, label="Best MC Portfolio", lw=1,linestyle='--',color="#39FF14")
+cumulative_spy.plot(ax=ax2, label="SPY Benchmark")
+ax2.set_title("Backtested Cumulative Returns")
+ax2.set_ylabel("Portfolio Value")
+ax2.grid(True)
+ax2.legend()
+st.pyplot(fig2)
 
-fig2 = go.Figure()
-fig2.add_trace(go.Scatter(y=cumulative_opt, name="Optimized Portfolio", line=dict(color="green", width=2)))
-fig2.add_trace(go.Scatter(y=cumulative_mc, name="Best MC Portfolio", line=dict(color="#39FF14", dash="dash", width=1)))
-fig2.add_trace(go.Scatter(y=cumulative_spy, name="SPY Benchmark", line=dict(color="blue", width=1)))
-fig2.update_layout(title="Backtested Cumulative Returns", yaxis_title="Portfolio Value", width=700, height=350)
-st.plotly_chart(fig2)
+st.markdown("<br><br>", unsafe_allow_html=True)
 
 # CSV Download
 st.subheader("⬇️ Download Allocation")
 st.dataframe(weights_df)
 st.download_button("Download as CSV", weights_df.to_csv(index=False), file_name="optimized_portfolio.csv")
 
-
-
-
+  
